@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gtland
+      POSTGRES_USER: gtland_admin
+      POSTGRES_PASSWORD: changeme
+    ports:
+      - "5432:5432"
+    volumes:
+      - gtland_db_data:/var/lib/postgresql/data
+
+volumes:
+  gtland_db_data:
