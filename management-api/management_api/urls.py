@@ -19,8 +19,19 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path
 
+from accounts import api as accounts_api
+from cards import api
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/auth/login/', accounts_api.login),
+    path('api/auth/register/', accounts_api.register),
+    path('api/auth/verify-email/', accounts_api.verify_email),
+    path('api/auth/resend-verification/', accounts_api.resend_verification),
+    path('api/auth/me/', accounts_api.me),
+    path('api/submissions/', api.create_submission),
+    path('api/submissions/<int:card_id>/', api.update_submission),
+    path('api/submissions/<int:card_id>/delete/', api.delete_submission),
 ]
 
 if settings.DEBUG:

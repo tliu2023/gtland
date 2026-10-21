@@ -34,7 +34,7 @@ Local filesystem storage only works if the server has a **persistent disk**. Ser
 
 Defined as Django models in `management-api/cards`; `storefront/` only reads these tables.
 
-- **Product** — shared fields: `id`, `slug`, `title`, `description`, `category` (`single_card` | `sealed` | `graded`), `price`, `quantity`, `status` (`available` | `sold` | `hidden`), `created_at`, `updated_at`
+- **Product** — shared fields: `id`, `slug`, `title`, `description`, `category` (`single_card` | `sealed` | `graded` | `deck`), `price`, `quantity`, `status` (`available` | `sold` | `hidden`), `created_at`, `updated_at`
 - **CardDetails** (1:1 with Product, when category = single_card/graded) — `set`, `player_or_character`, `year`, `condition`, `grading_company` (nullable, e.g. PSA/BGS), `grade` (nullable)
 - **SealedDetails** (1:1 with Product, when category = sealed) — `set`, `year`, `pack_count`/`box_type`, `sealed_condition`
 - **ProductImage** (1:many with Product) — `id`, `product`, `image`, `sort_order`
@@ -74,7 +74,6 @@ class ProductAdmin(admin.ModelAdmin):
 
 That's the whole "admin UI" — no custom frontend to build or maintain. A few optional add-ons worth considering later:
 
-- `django-import-export` on `ProductAdmin` for bulk CSV add/update of inventory
 - A small admin method to render an image thumbnail in `list_display`
 - `prepopulated_fields = {"slug": ("title",)}` so slugs auto-generate from the title
 
@@ -118,14 +117,13 @@ Visit `http://localhost:8000/admin/` and add a few test products.
 - [x] Read-only `gtland_readonly` DB role created; storefront's read path (`src/lib/db.ts`, `src/lib/products.ts`) queries real data
 - [x] Build product listing page (grid of cards with image, title, price, condition/grade) — verified end-to-end with a real product
 - [ ] Add real inventory via `/admin/`
-- [ ] Build product detail page (full images, description, condition/grade, "Inquire to buy" button)
-- [ ] Build category/filter navigation (singles / sealed / graded, set, price range)
-- [ ] Contact/inquiry form that emails you (e.g. Nodemailer via your Google Workspace SMTP, or a transactional email API)
-- [ ] Basic search (by player/set/year)
+- [x] Build product detail page (full images, description, condition/grade, "Inquire to buy" `mailto:` CTA) — verified end-to-end with a real product
+- [x] Build category/filter navigation (category, set, min/max price via URL search params, no client JS) — verified end-to-end
+- [x] Contact/inquiry form at `/contact` (Server Action + `nodemailer`; logs to console in dev if SMTP isn't configured) — verified end-to-end
+- [x] Basic search (keyword search across title, description, player/character, and set) — verified end-to-end
 
 ### Phase 2 — Operations & polish
-- [ ] `django-import-export` on `ProductAdmin` for bulk CSV add/update of inventory
-- [ ] Mark-as-sold workflow tied to inquiries
+- [x] Mark-as-sold workflow — already covered: `status` is in `list_editable` on `ProductAdmin`, so flipping a product to `sold` after a sale is a one-click edit in the admin list view (no inquiry record exists to tie it to, since inquiries are emailed, not stored)
 - [ ] Mobile responsive pass + basic SEO (meta tags, sitemap, product structured data)
 - [ ] Analytics (e.g. Plausible/GA) to see what people view
 - [ ] Automated backups of the Postgres database
