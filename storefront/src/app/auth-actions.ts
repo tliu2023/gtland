@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { API_URL, SESSION_COOKIE, SESSION_MAX_AGE, safeNextPath } from "@/lib/auth";
+import { mergeGuestCartInto } from "@/lib/guest-cart";
 
 type AuthResponse = {
   token?: string;
@@ -57,6 +58,7 @@ export async function login(formData: FormData) {
   if (data.code === "unverified") back("/login", next, { unverified: "1" });
   if (!data.token) back("/login", next, { error: error ?? "Login failed." });
   await startSession(data.token);
+  await mergeGuestCartInto(data.token);
   redirect(next);
 }
 

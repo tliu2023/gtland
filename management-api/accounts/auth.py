@@ -50,6 +50,18 @@ def user_from_request(request):
     return user
 
 
+def login_required_api(view):
+    @wraps(view)
+    def wrapper(request, *args, **kwargs):
+        user = user_from_request(request)
+        if user is None:
+            return JsonResponse({"error": "Authentication required."}, status=401)
+        request.user = user
+        return view(request, *args, **kwargs)
+
+    return wrapper
+
+
 def submission_editor_required(view):
     @wraps(view)
     def wrapper(request, *args, **kwargs):

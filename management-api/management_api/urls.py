@@ -21,6 +21,7 @@ from django.urls import path
 
 from accounts import api as accounts_api
 from cards import api
+from orders import api as orders_api
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -32,6 +33,13 @@ urlpatterns = [
     path('api/submissions/', api.create_submission),
     path('api/submissions/<int:card_id>/', api.update_submission),
     path('api/submissions/<int:card_id>/delete/', api.delete_submission),
+    path('api/cart/', orders_api.cart),
+    path('api/cart/add/', orders_api.add_to_cart),
+    path('api/cart/update/', orders_api.update_cart),
+    path('api/cart/remove/', orders_api.remove_from_cart),
+    path('api/cart/merge/', orders_api.merge_cart),
+    path('api/orders/', orders_api.orders),
+    path('api/orders/place/', orders_api.place_order),
 ]
 
 if settings.DEBUG:

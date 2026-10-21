@@ -4,16 +4,20 @@ import { notFound } from "next/navigation";
 import { games } from "@/lib/games";
 import { categoryLabels, getProductBySlug } from "@/lib/products";
 import { resolveImageUrl } from "@/lib/media";
+import { addToCart } from "../../cart/actions";
 
 // inventory changes via the admin, so render fresh on every request rather than at build time
 export const dynamic = "force-dynamic";
 
 export default async function ProductPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ added?: string; error?: string }>;
 }) {
   const { slug } = await params;
+  const { added, error } = await searchParams;
   const product = await getProductBySlug(slug);
 
   if (!product) {
@@ -107,18 +111,57 @@ export default async function ProductPage({
               </p>
             )}
 
-            <div className="mt-6">
-              {product.status === "sold" ? (
-                <span className="inline-block rounded-full bg-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+            <div className="mt-6 flex flex-col gap-3">
+              {added && (
+                <p className="rounded border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-300">
+                  Added to your cart.{" "}
+                  <Link href="/cart" className="font-medium underline">
+                    View cart
+                  </Link>
+                </p>
+              )}
+              {error && (
+                <p className="rounded border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+                  {error}
+                </p>
+              )}
+              {product.status === "sold" || product.quantity === 0 ? (
+                <span className="inline-block w-fit rounded-full bg-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                   Sold
                 </span>
               ) : (
-                <Link
-                  href={`/contact?product=${product.slug}`}
-                  className="inline-block rounded-full bg-black px-6 py-3 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-                >
-                  Inquire to buy
-                </Link>
+                <div className="flex flex-wrap items-center gap-3">
+                  <form action={addToCart} className="flex items-center gap-2">
+                    <input type="hidden" name="productId" value={product.id} />
+                    <input type="hidden" name="slug" value={product.slug} />
+                    {product.quantity > 1 && (
+                      <input
+                        type="number"
+                        name="quantity"
+                        min={1}
+                        max={product.quantity}
+                        defaultValue={1}
+                        aria-label="Quantity"
+                        className="w-16 rounded border border-zinc-300 bg-white px-2 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50"
+                      />
+                    )}
+                    <button
+                      type="submit"
+                      className="rounded-full bg-black px-6 py-3 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                    >
+                      Add to cart
+                    </button>
+                  </form>
+                  <Link
+                    href={`/contact?product=${product.slug}`}
+                    className="text-sm text-zinc-600 underline hover:text-black dark:text-zinc-400 dark:hover:text-zinc-50"
+                  >
+                    Ask a question
+                  </Link>
+                </div>
+              )}
+              {product.status === "available" && product.quantity > 0 && (
+                <p className="text-sm text-zinc-500">{product.quantity} in stock</p>
               )}
             </div>
           </div>
