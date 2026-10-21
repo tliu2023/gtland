@@ -32,6 +32,18 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = [h for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',') if h]
 
+# Full origins (with scheme) allowed to POST to the admin, e.g. https://gtland.com
+CSRF_TRUSTED_ORIGINS = [o for o in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',') if o]
+
+if not DEBUG:
+    # TLS terminates at the reverse proxy (Caddy), which sets X-Forwarded-Proto
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # Caddy redirects HTTP->HTTPS and sends HSTS; a Django-level redirect would break the
+    # storefront's internal http://api:8000 calls
+    SILENCED_SYSTEM_CHECKS = ['security.W004', 'security.W008']
+
 
 # Application definition
 
@@ -128,6 +140,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
+# collectstatic target; served by the reverse proxy in production
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Uploaded product images (persistent volume in production, see README)
 MEDIA_URL = 'media/'
@@ -154,3 +168,20 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'gtland <no-reply@loca
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Database-backed cache so state like login lockouts is shared across gunicorn workers.
+# Create the table once with `python manage.py createcachetable`.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'django_cache',
+    }
+}
+
+# Send warnings and errors (including 500 tracebacks) to stdout so `docker logs` shows them
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'console': {'class': 'logging.StreamHandler'}},
+    'root': {'handlers': ['console'], 'level': os.environ.get('DJANGO_LOG_LEVEL', 'WARNING')},
+}

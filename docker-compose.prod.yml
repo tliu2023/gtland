@@ -1,0 +1,95 @@
+# Production stack: docker compose -f docker-compose.prod.yml up -d --build
+# Reads secrets from ./.env (copy deploy/env.example to .env and fill it in).
+
+x-email: &email
+  EMAIL_HOST: ${EMAIL_HOST:-}
+  EMAIL_PORT: ${EMAIL_PORT:-587}
+  EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+  EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+  DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-}
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gtland}
+      POSTGRES_USER: ${POSTGRES_USER:-gtland_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      STOREFRONT_DB_USER: ${STOREFRONT_DB_USER:-gtland_readonly}
+      STOREFRONT_DB_PASSWORD: ${STOREFRONT_DB_PASSWORD:?set STOREFRONT_DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./management-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *email
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
+      DJANGO_DEBUG: "False"
+      # "api" is the internal hostname the storefront uses to reach Django
+      DJANGO_ALLOWED_HOSTS: ${DOMAIN:?set DOMAIN in .env},api
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://${DOMAIN}
+      DB_NAME: ${POSTGRES_DB:-gtland}
+      DB_USER: ${POSTGRES_USER:-gtland_admin}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: db
+      STOREFRONT_URL: https://${DOMAIN}
+      STOREFRONT_DB_USER: ${STOREFRONT_DB_USER:-gtland_readonly}
+    volumes:
+      - media:/app/media
+      - static:/app/staticfiles
+
+  storefront:
+    build:
+      context: ./storefront
+      args:
+        MEDIA_BASE_URL: https://${DOMAIN}
+        NEXT_PUBLIC_CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      DATABASE_URL: postgres://${STOREFRONT_DB_USER:-gtland_readonly}:${STOREFRONT_DB_PASSWORD}@db:5432/${POSTGRES_DB:-gtland}
+      MANAGEMENT_API_URL: http://api:8000
+      MEDIA_BASE_URL: https://${DOMAIN}
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+      SMTP_HOST: ${EMAIL_HOST:-}
+      SMTP_PORT: ${EMAIL_PORT:-587}
+      SMTP_USER: ${EMAIL_HOST_USER:-}
+      SMTP_PASS: ${EMAIL_HOST_PASSWORD:-}
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - api
+      - storefront
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - static:/srv/static:ro
+      - media:/srv/media:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  media:
+  static:
+  caddy_data:
+  caddy_config:

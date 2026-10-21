@@ -1,0 +1,28 @@
+# Caddy gets and renews the HTTPS certificate for {$DOMAIN} automatically
+# (DNS for the domain must point at this server and ports 80/443 must be open).
+{$DOMAIN} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+
+	# Django admin assets (from collectstatic)
+	handle_path /static/* {
+		root * /srv/static
+		file_server
+	}
+
+	# Uploaded product images
+	handle_path /media/* {
+		root * /srv/media
+		header X-Content-Type-Options nosniff
+		file_server
+	}
+
+	# Only the admin is public; Django's /api is reachable just from the storefront container
+	handle /admin* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy storefront:3000
+	}
+}

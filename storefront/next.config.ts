@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
+// product images are served from management-api's MEDIA_URL; read at build time
+const media = new URL(process.env.MEDIA_BASE_URL || "http://localhost:8000");
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  // self-contained server bundle for the production Docker image
+  output: "standalone",
   // disabled: the catalog is DB-backed and changes via the admin, so pages
   // should render dynamically rather than be statically prerendered/cached.
   cacheComponents: false,
@@ -10,8 +14,14 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "10mb" },
   },
   images: {
-    // product images are served by management-api's MEDIA_URL
-    remotePatterns: [{ protocol: "http", hostname: "localhost", port: "8000" }],
+    remotePatterns: [
+      {
+        protocol: media.protocol.replace(":", "") as "http" | "https",
+        hostname: media.hostname,
+        port: media.port,
+        pathname: "/media/**",
+      },
+    ],
   },
   turbopack: {
     rules: {

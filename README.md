@@ -133,10 +133,47 @@ Visit `http://localhost:8000/admin/` and add a few test products.
 - [ ] Migrate images to object storage (S3/R2) if moving `management-api` or `gtland` off a VPS
 - [ ] Wishlist / "notify me when back in stock"
 
-## Deployment (when ready)
+## Production deployment
 
-1. Provision a small VPS, install Docker + Docker Compose
-2. `docker-compose.yml` at the repo root with services: `management-api` (Django + admin, building from `management-api/`), `storefront` (Next.js, building from `storefront/`), `db` (Postgres, with a named volume shared by both), optionally `nginx` as reverse proxy + TLS (Let's Encrypt via Certbot)
-3. Point your domain's A record to the VPS IP; keep MX records pointing at Google Workspace for email
-4. Set production `DATABASE_URL` and other secrets as environment variables for both services (never commit `.env`)
-5. Run Django migrations (`python manage.py migrate`) on deploy for `management-api`; `storefront` needs no migrations since it doesn't own the schema
+The production stack is in `docker-compose.prod.yml`: PostgreSQL, Django, Next.js, and Caddy. Caddy obtains and renews HTTPS certificates automatically. Django runs migrations, creates its cache table, collects admin static files, and grants the storefront's read-only database role on startup. This setup is intended for a Linux VPS with persistent disk, not a serverless host.
+
+### Before deploying
+
+- Provision a VPS with Docker Engine and the Docker Compose plugin. Allow inbound ports 80 and 443; keep SSH access restricted. The Compose file publishes only the Caddy ports, not PostgreSQL or the app containers.
+- Point the domain's DNS A record at the VPS. If you publish an AAAA record, make sure IPv6 also reaches the VPS. Caddy needs working DNS and inbound ports 80/443 to issue the certificate. Keep mail MX records pointed at Google Workspace.
+- Clone this repository on the server and create the production environment file:
+
+    ```sh
+    cp deploy/env.example .env
+    openssl rand -hex 32  # generate a value for each secret below
+    ```
+
+- Edit `.env`: set `DOMAIN`, unique strong values for `POSTGRES_PASSWORD`, `STOREFRONT_DB_PASSWORD`, and `DJANGO_SECRET_KEY`, plus `CONTACT_EMAIL`. Use hexadecimal/alphanumeric database passwords because the storefront password is embedded in a connection URL. Do not commit or share `.env`.
+- Configure `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, and `EMAIL_HOST_PASSWORD` with working SMTP credentials. For Google Workspace, use an app password. Email is required for account verification and contact-form delivery; set `DEFAULT_FROM_EMAIL` to a sender address you control. Configure SPF/DKIM for reliable delivery.
+
+### First deployment
+
+Run these commands from the repository root on the server:
+
+```sh
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml exec api python manage.py createsuperuser
+```
+
+The first build can take a few minutes. Check `docker compose -f docker-compose.prod.yml logs -f caddy` if HTTPS is not available yet, and check the `api` and `storefront` logs for startup errors. Then visit `https://<DOMAIN>/admin/`, sign in with the superuser you created, and add real inventory. Uploaded product images are stored on the persistent `media` volume and served by Caddy.
+
+Before sharing the site, verify on the public domain that the catalog and product images load, a new account can register and receive/complete email verification, and the contact form reaches `CONTACT_EMAIL`. Use a strong, unique admin password. No payment processing is configured: sales are currently handled through inquiries/contact email.
+
+### Ongoing operations
+
+- To deploy an update, pull the intended revision and run `docker compose -f docker-compose.prod.yml up -d --build`. Django migrations run automatically when the API container starts. Rebuild after changing build-time values such as `DOMAIN` or `CONTACT_EMAIL`.
+- Set up automated off-server backups for PostgreSQL and uploaded media, and periodically test restoring them. The Compose stack provides persistent volumes, but it does not create backups. Do not run `docker compose down -v` unless you intend to delete the database, uploads, static files, and Caddy state.
+- Monitor container logs and disk usage, keep the OS and Docker images updated, and protect the VPS and `.env` file. The Django admin is reachable at `https://<DOMAIN>/admin/`.
+
+### Still to decide or complete
+
+- Production hosting, DNS, SMTP credentials, and the first admin/inventory setup are operator tasks; they are not included in the repository.
+- Backups are not automated and should be configured before relying on production data.
+- A mobile/SEO review and analytics are still on the roadmap. They are useful launch polish, but not prerequisites for starting this stack.
+- Checkout and payment processing are not implemented. The current buying flow is inquiry-based; add and test payment handling before accepting online payments.
